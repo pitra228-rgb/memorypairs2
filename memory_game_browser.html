@@ -1,0 +1,892 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Memory Pairs</title>
+  <style>
+    /* "Delta Gothic" look (Google font name: Dela Gothic One) */
+    @import url('https://fonts.googleapis.com/css2?family=Dela+Gothic+One&display=swap');
+
+    :root { --card-w: 120px; --card-h: 160px; --gap: 12px; }
+    body{
+      margin:0;
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+      min-height:100vh;
+      display:flex;
+      align-items:flex-start;
+      justify-content:center;
+      background: #000;
+      padding: 18px;
+    }
+
+    /* Full-screen background video */
+    #bgVideo{
+      position: fixed;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      z-index: -2;
+    }
+    .bgOverlay{
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,.22);
+      z-index: -1;
+      pointer-events: none;
+    }
+
+    /* If the board fits on screen, center it vertically */
+    body.centerY{
+      align-items:center;
+    }
+    .wrap{
+      width:min(1200px, 96vw);
+      background: rgba(255,255,255,0.82);
+      backdrop-filter: blur(6px);
+      border-radius: 18px;
+      padding: 16px 16px 20px;
+      box-shadow: 0 10px 30px rgba(0,0,0,.22);
+    }
+    header{ display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:12px; flex-wrap:wrap; }
+    h1{ font-size:20px; margin:0; }
+    .stats{ display:flex; gap:16px; font-size:14px; opacity:.85; flex-wrap:wrap; align-items:center; }
+    .controls{ display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
+    .controls label{ font-weight:700;color:#111;opacity:.85; }
+    select, button{
+      border:0; border-radius: 12px; padding:10px 12px; cursor:pointer;
+      background:#111; color:#fff; font-weight:600;
+    }
+    .grid{
+      display:grid;
+      grid-template-columns: repeat(auto-fit, minmax(var(--card-w), 1fr));
+      gap: var(--gap);
+      justify-items: center;
+    }
+    .card{
+      width: var(--card-w); height: var(--card-h);
+      position: relative; cursor: pointer;
+      transform-style: preserve-3d;
+      transition: transform .6s cubic-bezier(.4,0,.2,1); /* smoother */
+      user-select:none;
+    }
+    .card.flipped{ transform: rotateY(180deg); }
+    .card.matched{ transform: rotateY(0deg); }
+    .card.matched{ cursor: default; opacity: .9; }
+    .face{
+      position:absolute; inset:0;
+      backface-visibility:hidden;
+      border-radius: 14px;
+      overflow:hidden;
+      box-shadow: 0 6px 14px rgba(0,0,0,.18);
+      background:#f3f3f3;
+      display:flex; align-items:center; justify-content:center;
+    }
+    .front{ transform: rotateY(180deg); }
+    .face img{ width:100%; height:100%; object-fit: cover; display:block; }
+    .msg{ margin-top:12px; font-size:14px; opacity:.9; }
+
+.buffyCorner{position:fixed;width:120px;z-index: 50;pointer-events:none;}
+.buffyCorner.topright{top:20px;right:20px;}
+.buffyCorner.bottomleft{bottom:20px;left:20px;}
+
+  
+    /* Intro / greeting overlay (matches your example layout) */
+    .introOverlay{
+      position: fixed;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: rgba(0,0,0,.35);
+      z-index: 9999;
+      padding: 24px;
+    }
+    .introOverlay.hidden{ display:none; }
+
+    .introCard{
+      position: relative;
+      width: min(860px, 94vw);
+      display: grid;
+      grid-template-columns: 240px 1fr;
+      background: rgba(255,255,255,.86);
+      border: 1px solid rgba(0,0,0,.08);
+      border-radius: 18px;
+      box-shadow: 0 12px 46px rgba(0,0,0,.35);
+      overflow: hidden;
+      cursor: pointer;
+    }
+
+    .introSide{
+      background: rgba(245, 215, 235, .55);
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      padding: 18px;
+    }
+    .introSide img{
+      width: 160px;
+      height: auto;
+      filter: drop-shadow(0 10px 18px rgba(0,0,0,.25));
+      user-select:none;
+      pointer-events:none;
+    }
+
+    .introBody{
+      padding: 22px 28px;
+      color: #151515;
+      font-family: 'Dela Gothic One', system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+    }
+    .introTitle{
+      margin: 2px 0 10px;
+      font-size: 26px;
+      letter-spacing: .2px;
+    }
+    .introText{
+      margin: 0 0 10px;
+      font-size: 14px;
+      line-height: 1.5;
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+      font-weight: 600;
+    }
+    .introHint{
+      margin: 10px 0 0;
+      font-size: 12px;
+      opacity: .7;
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+      font-weight: 600;
+    }
+
+    /* Blur and lock the game while intro is open (so cards are visible behind) */
+    
+    
+
+
+body.intro-open #game{filter:blur(7px);pointer-events:none;}
+
+/* --- Game Over overlay --- */
+.gameOverOverlay{
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0,0,0,.45);
+  z-index: 10000;
+  padding: 24px;
+}
+.gameOverOverlay.hidden{ display:none; }
+.gameOverCard{
+  width: min(640px, 94vw);
+  background: rgba(255,255,255,.90);
+  border: 1px solid rgba(0,0,0,.08);
+  border-radius: 18px;
+  box-shadow: 0 12px 46px rgba(0,0,0,.40);
+  padding: 22px 24px 18px;
+  text-align: center;
+}
+.gameOverTitle{
+  font-family: 'Dela Gothic One', system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+  font-size: 34px;
+  letter-spacing: .4px;
+  margin: 4px 0 12px;
+}
+.gameOverBtn{
+  display: inline-block;
+  margin: 0 0 14px;
+  padding: 12px 18px;
+  border-radius: 14px;
+  background: #111;
+  color: #fff;
+  font-weight: 800;
+  border: 0;
+}
+.gameOverStats{
+  display: flex;
+  justify-content: center;
+  gap: 16px;
+  flex-wrap: wrap;
+  font-size: 14px;
+  opacity: .9;
+  margin: 8px 0 10px;
+}
+.gameOverHint{
+  margin: 10px 0 0;
+  font-size: 12px;
+  opacity: .75;
+  font-weight: 700;
+}
+
+/* --- "are u sure" selection animation --- */
+@keyframes aus-shake{
+  0%,100%{ transform: translate3d(0,0,0); }
+  10%{ transform: translate3d(-6px, 2px, 0); }
+  20%{ transform: translate3d(6px, -2px, 0); }
+  30%{ transform: translate3d(-5px, -1px, 0); }
+  40%{ transform: translate3d(5px, 1px, 0); }
+  50%{ transform: translate3d(-4px, 0, 0); }
+  60%{ transform: translate3d(4px, 0, 0); }
+  70%{ transform: translate3d(-3px, 0, 0); }
+  80%{ transform: translate3d(3px, 0, 0); }
+  90%{ transform: translate3d(-2px, 0, 0); }
+}
+@keyframes aus-flash{
+  0%{ opacity: 0; }
+  15%{ opacity: 1; }
+  100%{ opacity: 0; }
+}
+body.areusure-anim .wrap{
+  animation: aus-shake 650ms ease-in-out;
+}
+body.areusure-anim::after{
+  content:"";
+  position: fixed;
+  inset: 0;
+  background: rgba(255, 0, 80, .28);
+  z-index: 9998;
+  pointer-events: none;
+  animation: aus-flash 650ms ease-in-out;
+}
+
+body.gameover-open .wrap{ filter: blur(7px); }
+body.gameover-open{ overflow: hidden; }
+
+/* --- Intro blur layer (blurs EVERYTHING behind the greeting card) --- */
+.intro-blur{
+  position: fixed;
+  inset: 0;
+  z-index: 9998;
+  display: none;
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+  background: rgba(0,0,0,0.18);
+}
+body.intro-open .intro-blur{ display:block; }
+
+/* Block gameplay interactions while intro is open */
+body.intro-open #game{ pointer-events:none; }
+
+
+/* --- Board centering: keeps last row centered on all difficulties --- */
+#board, .board, #gameBoard, .game-board, #grid, .grid {
+  display: flex !important;
+  flex-wrap: wrap !important;
+  justify-content: center !important;
+  align-content: flex-start !important;
+}
+
+#board, .board, #gameBoard, .game-board, #grid, .grid {
+  gap: var(--card-gap, 18px) !important;
+}
+
+
+/* --- Volume control --- */
+.volume-wrap{
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  margin-left: 14px;
+  user-select: none;
+}
+.volume-label{
+  font-weight: 600;
+  font-size: 14px;
+  opacity: 0.85;
+}
+.volume-slider{
+  width: 140px;
+}
+
+
+/* volume bar placement tweak */
+.volume-wrap{ margin-left: 0 !important; margin-right: 14px; }
+
+
+
+.buffyCorner{animation:spin 6s linear infinite;}
+@keyframes spin{from{transform:rotate(0deg);}to{transform:rotate(360deg);}}
+
+</style>
+
+<style>
+/* removed duplicate body block */
+</style>
+</head>
+
+<body class="intro-open">
+  <video id="bgVideo" autoplay muted loop playsinline preload="auto">
+    <source src="bg.mp4" type="video/mp4">
+  </video>
+  <div class="bgOverlay" aria-hidden="true"></div>
+<audio id="bgm" loop><source src="music.mp3" type="audio/mpeg"></audio>
+<img src="buffy_corners.gif" class="buffyCorner topright" alt="">
+<img src="buffy_corners.gif" class="buffyCorner bottomleft" alt="">
+  <div id="introBlur" class="intro-blur"></div>
+<div id="introOverlay" class="introOverlay" aria-hidden="false">
+    <div id="introCard" class="introCard" role="dialog" aria-modal="true" aria-labelledby="introText">
+      <div class="introSide" aria-hidden="true">
+        <img src="octopus_intro.png" alt="octopus">
+      </div>
+      <div class="introBody">
+        <div class="introTitle">Memory Pairs</div>
+        <p id="introText" class="introText">Hello this is the second part of Memory Pairs for (re).</p>
+        <p class="introHint">Tap anywhere to continue…</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Game Over overlay -->
+  <div id="gameOverOverlay" class="gameOverOverlay hidden" aria-hidden="true">
+    <div class="gameOverCard" role="dialog" aria-modal="true" aria-labelledby="gameOverTitle">
+      <div id="gameOverTitle" class="gameOverTitle">GAME OVER</div>
+      <button id="gameOverButton" class="gameOverBtn" type="button">GAME OVER</button>
+      <div class="gameOverStats" aria-label="Final stats">
+        <div>Moves: <b id="goMoves">0</b></div>
+        <div>Matches: <b id="goMatches">0</b>/<b id="goTotal">0</b></div>
+        <div>Time: <b id="goTime">0:00</b></div>
+      </div>
+      <div class="gameOverHint">Press any key (or click) to start again…</div>
+    </div>
+  </div>
+
+  <div class="wrap">
+    <header>
+      <div>
+        <h1>Memory Pairs</h1>
+        <div class="stats">
+          <div>Moves: <b id="moves">0</b></div>
+          <div>Matches: <b id="matches">0</b>/<b id="totalPairs">0</b></div>
+          <div>Time: <b id="time">0:00</b></div>
+        </div>
+      </div>
+
+      <div class="controls">
+        <div class="volume-wrap" title="Music volume">
+          <span class="volume-label">Volume:</span>
+          <input id="volume" class="volume-slider" type="range" min="0" max="100" step="1" value="25" aria-label="Music volume">
+        </div>
+        <label for="difficulty">
+Select difficulty:</label>
+        <select id="difficulty" title="Select difficulty">
+          <option value="6">Easy (6 pairs)</option>
+          <option value="12">Medium (12 pairs)</option>
+          <option value="18">Hard (18 pairs)</option>
+          <option value="20">Very Hard (20 pairs)</option>
+          <option value="24" selected>Insane (24 pairs)</option>
+          <option value="areusure">Are you sure? (48 pairs)</option>
+        </select>
+<button id="reset">Reset</button>
+      </div>
+    </header>
+
+    <div id="grid" class="grid"></div>
+    <div id="msg" class="msg"></div>
+  </div>
+
+<script>
+// Background video: slow it down slightly (lower = slower)
+const bgVideo = document.getElementById('bgVideo');
+if (bgVideo){
+  const RATE = 0.7;
+  const setRate = () => { try { bgVideo.playbackRate = RATE; } catch(e){} };
+  bgVideo.addEventListener('loadedmetadata', setRate);
+  setRate();
+  // Ensure autoplay continues on some browsers after first interaction
+  window.addEventListener('pointerdown', () => { bgVideo.play().catch(()=>{}); }, { once: true });
+}
+
+const bgm = document.getElementById('bgm');
+// --- Volume control (slider to the left of difficulty) ---
+const volumeEl = document.getElementById('volume');
+// Load saved volume (0..1). Default 0.25
+const savedVol = (() => {
+  try {
+    const v = localStorage.getItem('mp_volume');
+    const n = v === null ? NaN : Number(v);
+    return Number.isFinite(n) ? Math.min(1, Math.max(0, n)) : NaN;
+  } catch (_) {
+    return NaN;
+  }
+})();
+
+bgm.volume = Number.isFinite(savedVol) ? savedVol : 0.25;
+
+if (volumeEl){
+  // Sync slider with actual volume
+  volumeEl.value = String(Math.round(bgm.volume * 100));
+
+  const onVol = () => {
+    const v = Math.min(100, Math.max(0, Number(volumeEl.value)));
+    bgm.volume = v / 100;
+    try { localStorage.setItem('mp_volume', String(bgm.volume)); } catch(_){ }
+  };
+
+  volumeEl.addEventListener('input', onVol);
+  volumeEl.addEventListener('change', onVol);
+}
+
+window.addEventListener('pointerdown', () => { if (bgm.paused) bgm.play().catch(()=>{}); }, { once: true });
+
+// Base image set used by the numeric difficulties
+const BASE_IMAGES = Array.from({length: 24}, (_, i) => `img${i+1}.png`);
+
+// Special image set for the "are u sure" difficulty (24 unique images)
+const ARE_U_SURE_IMAGES = Array.from({length: 24}, (_, i) => `areusure/areusure${String(i+1).padStart(2, '0')}.png`);
+const CARD_BACK = "back.png";
+const MATCHED_IMAGE = "matched.png";
+
+// timing tweaks (ms)
+const FLIP_BACK_DELAY = 900;      // mismatch stays visible longer
+const MATCH_FREEZE_DELAY = 900;   // match stays visible longer before turning into logo
+const LOCK_AFTER_MATCH = 300;     // small pause after match so it doesn't feel instant
+
+const grid = document.getElementById("grid");
+const movesEl = document.getElementById("moves");
+const matchesEl = document.getElementById("matches");
+const totalPairsEl = document.getElementById("totalPairs");
+const msgEl = document.getElementById("msg");
+const timeEl = document.getElementById("time");
+
+// Game Over overlay elements
+const gameOverOverlay = document.getElementById('gameOverOverlay');
+const gameOverButton = document.getElementById('gameOverButton');
+const goMovesEl = document.getElementById('goMoves');
+const goMatchesEl = document.getElementById('goMatches');
+const goTotalEl = document.getElementById('goTotal');
+const goTimeEl = document.getElementById('goTime');
+
+let gameOverActive = false;
+let restartHandler = null;
+
+function pauseMedia(){
+  try { if (bgVideo && !bgVideo.paused) bgVideo.pause(); } catch(_){ }
+  // Keep music playing during GAME OVER (requested)
+}
+
+function resumeMedia(){
+  try { if (bgVideo) bgVideo.play().catch(()=>{}); } catch(_){ }
+  // Music will only resume if the browser allows it (after user interaction)
+  try { if (bgm) bgm.play().catch(()=>{}); } catch(_){ }
+}
+
+function hideGameOver(){
+  if (!gameOverOverlay) return;
+  gameOverActive = false;
+  document.body.classList.remove('gameover-open');
+  gameOverOverlay.classList.add('hidden');
+  gameOverOverlay.setAttribute('aria-hidden','true');
+  if (gameOverButton){
+    gameOverButton.onclick = null;
+  }
+  if (restartHandler){
+    window.removeEventListener('keydown', restartHandler, true);
+    window.removeEventListener('pointerdown', restartHandler, true);
+    restartHandler = null;
+  }
+}
+
+function showGameOver(elapsedMs){
+  if (!gameOverOverlay) return;
+  gameOverActive = true;
+  lock = true; // pause interactions
+  msgEl.textContent = "";
+  // If called without a pre-stopped timer, stop it here
+  if (timerRunning) elapsedMs = stopTimer();
+  if (goMovesEl) goMovesEl.textContent = String(moves);
+  if (goMatchesEl) goMatchesEl.textContent = String(matches);
+  if (goTotalEl) goTotalEl.textContent = String(activePairs);
+  if (goTimeEl) goTimeEl.textContent = formatTime(elapsedMs || 0);
+
+  document.body.classList.add('gameover-open');
+  gameOverOverlay.classList.remove('hidden');
+  gameOverOverlay.setAttribute('aria-hidden','false');
+
+  pauseMedia();
+
+  // Restart on any key or click
+  restartHandler = (e) => {
+    if (!gameOverActive) return;
+    // prevent accidental double triggers
+    e.preventDefault?.();
+    e.stopPropagation?.();
+    hideGameOver();
+    init();
+    resumeMedia();
+  };
+  window.addEventListener('keydown', restartHandler, true);
+  window.addEventListener('pointerdown', restartHandler, true);
+
+  if (gameOverButton){
+    gameOverButton.onclick = restartHandler;
+  }
+}
+
+const difficultyEl = document.getElementById("difficulty");
+document.getElementById("reset").addEventListener("click", init);
+difficultyEl.addEventListener("change", () => {
+  // Special warning animation when selecting "are u sure"
+  if (difficultyEl.value === 'areusure'){
+    playAreUSureSelectAnimation();
+  }
+  init();
+});
+
+let deck = [];
+let first = null;
+let second = null;
+let lock = false;
+let moves = 0;
+let matches = 0;
+let activePairs = 24;
+let activeImages = BASE_IMAGES;
+let activeDiffId = 'insane';
+
+function playAreUSureSelectAnimation(){
+  // Restart the animation if the user selects it repeatedly
+  document.body.classList.remove('areusure-anim');
+  // Force reflow
+  void document.body.offsetWidth;
+  document.body.classList.add('areusure-anim');
+  window.setTimeout(() => document.body.classList.remove('areusure-anim'), 700);
+}
+
+// Timer
+let timerStart = null;
+let timerInterval = null;
+let timerRunning = false;
+
+function formatTime(ms) {
+  const totalSec = Math.floor(ms / 1000);
+  const m = Math.floor(totalSec / 60);
+  const s = totalSec % 60;
+  return `${m}:${String(s).padStart(2, "0")}`;
+}
+
+function updateLayout() {
+  const wrap = document.querySelector('.wrap');
+  if (!wrap) return;
+
+  // If the whole UI fits in the viewport, center it vertically.
+  // If it doesn't fit, keep it top-aligned so scrolling feels normal.
+  const bodyPad = 18 * 2; // matches body padding in CSS
+  const fits = (wrap.offsetHeight + bodyPad) <= window.innerHeight;
+  document.body.classList.toggle('centerY', fits);
+}
+
+function setTime(ms) {
+  if (!timeEl) return;
+  timeEl.textContent = formatTime(ms);
+}
+
+function resetTimer() {
+  timerStart = null;
+  timerRunning = false;
+  if (timerInterval) {
+    clearInterval(timerInterval);
+    timerInterval = null;
+  }
+  setTime(0);
+}
+
+function startTimer() {
+  if (timerRunning) return;
+  timerRunning = true;
+  // If we already had time running (shouldn't), keep continuity; otherwise start now
+  timerStart = performance.now();
+  if (timerInterval) clearInterval(timerInterval);
+  timerInterval = setInterval(() => {
+    if (!timerRunning || timerStart === null) return;
+    setTime(performance.now() - timerStart);
+  }, 200);
+}
+
+function stopTimer() {
+  if (!timerRunning) return 0;
+  timerRunning = false;
+  const elapsed = timerStart === null ? 0 : (performance.now() - timerStart);
+  if (timerInterval) {
+    clearInterval(timerInterval);
+    timerInterval = null;
+  }
+  setTime(elapsed);
+  return elapsed;
+}
+
+function shuffle(arr){
+  for(let i = arr.length - 1; i > 0; i--){
+    const j = Math.floor(Math.random() * (i + 1));
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
+  return arr;
+}
+
+function makeDeck(pairCount, images){
+  const source = Array.isArray(images) ? images : BASE_IMAGES;
+  const shuffled = shuffle([...source]);
+
+  // If we have enough unique images, use the classic "two of each" deck.
+  if (pairCount <= shuffled.length){
+    const chosen = shuffled.slice(0, pairCount);
+    const cards = chosen.flatMap((name) => ([
+      { id: crypto.randomUUID(), face: name, key: name },
+      { id: crypto.randomUUID(), face: name, key: name }
+    ]));
+    return shuffle(cards);
+  }
+
+  // If pairCount > unique images (ex: "Are you sure?" wants 48 pairs but only 24 images),
+  // we REUSE visuals but keep pair identities unique so matching stays correct.
+  // That means the same picture can represent multiple different pairs.
+  const needed = pairCount;
+  const chosen = [];
+  for (let i = 0; i < needed; i++){
+    chosen.push(shuffled[i % shuffled.length]);
+  }
+
+  const cards = chosen.flatMap((name, i) => {
+    const pairKey = `${name}__pair${i+1}`; // unique per pair
+    return [
+      { id: crypto.randomUUID(), face: name, key: pairKey },
+      { id: crypto.randomUUID(), face: name, key: pairKey }
+    ];
+  });
+
+  return shuffle(cards);
+}
+
+function render(){
+  grid.innerHTML = "";
+  deck.forEach((card) => {
+    const el = document.createElement("div");
+    el.className = "card";
+    el.dataset.key = card.key;
+
+    el.innerHTML = `
+      <div class="face back"><img alt="Card back" src="${CARD_BACK}"></div>
+      <div class="face front"><img alt="Card" src="${card.face}"></div>
+    `;
+
+    el.addEventListener("click", () => onFlip(el));
+    grid.appendChild(el);
+  });
+
+  totalPairsEl.textContent = String(activePairs);
+  updateHUD();
+
+  // Center the smaller boards (Easy/Medium) in the viewport.
+  requestAnimationFrame(updateLayout);
+}
+
+function updateHUD(){
+  movesEl.textContent = String(moves);
+  matchesEl.textContent = String(matches);
+}
+
+function onFlip(cardEl){
+  if(lock) return;
+  if(cardEl.classList.contains("matched")) return;
+  if(cardEl === first) return;
+
+  cardEl.classList.add("flipped");
+
+  // Start timer on the first interaction
+  if(!timerRunning) startTimer();
+
+  if(!first){
+    first = cardEl;
+    return;
+  }
+
+  second = cardEl;
+  moves++;
+  updateHUD();
+
+  const isMatch = first.dataset.key === second.dataset.key;
+
+  if(isMatch){
+    lock = true;
+
+    // keep the matched faces visible a bit longer...
+    setTimeout(() => {
+      [first, second].forEach((x) => {
+        x.classList.add("matched");
+        x.classList.remove("flipped");
+        // then turn into logo (front + back so it's always visible)
+        x.querySelector(".front img").src = MATCHED_IMAGE;
+        x.querySelector(".back img").src = MATCHED_IMAGE;
+      });
+
+      matches++;
+      updateHUD();
+
+      // small pause after turning into logo
+      setTimeout(() => {
+        first = null;
+        second = null;
+        lock = false;
+
+        if(matches === activePairs){
+          const elapsed = stopTimer();
+          showGameOver(elapsed);
+        }
+      }, LOCK_AFTER_MATCH);
+
+    }, MATCH_FREEZE_DELAY);
+
+    return;
+  }
+
+  lock = true;
+  setTimeout(() => {
+    first.classList.remove("flipped");
+    second.classList.remove("flipped");
+    first = null;
+    second = null;
+    lock = false;
+  }, FLIP_BACK_DELAY);
+}
+
+
+function applyDifficultyVisuals(pairs, diffId){
+  // Default sizes
+  let cardW = 120, cardH = 160, gap = 16;
+
+  // Ultra board (48 pairs = 96 cards). This cannot fit on *every* screen without any scrolling,
+  // but we aggressively shrink cards and tighten gaps to reduce scrolling as much as possible.
+  if (pairs === 48){
+    const wrap = document.querySelector('.wrap');
+    const wrapW = wrap ? wrap.clientWidth : Math.min(1200, Math.floor(window.innerWidth * 0.96));
+    const headerH = (wrap && wrap.querySelector('header')) ? wrap.querySelector('header').offsetHeight : 0;
+
+    // Aim for 12 columns x 8 rows (96 cards).
+    const cols = 12;
+    gap = 8;
+    const pad = 32;
+    const maxW = Math.floor((wrapW - pad - (cols - 1) * gap) / cols);
+
+    const availableH = Math.max(420, window.innerHeight - headerH - 120);
+    const rows = 8;
+    const maxH = Math.floor((availableH - (rows - 1) * gap) / rows);
+
+    const ratio = 160 / 120;
+    cardW = Math.max(46, Math.min(maxW, Math.floor(maxH / ratio)));
+    cardH = Math.floor(cardW * ratio);
+
+    // A little extra tightness for "Are you sure?"
+    if (diffId === 'areusure'){
+      gap = Math.max(6, gap - 2);
+    }
+  }
+
+  // For big boards (24 pairs = 48 cards), auto-size to avoid scrolling on most screens
+  else if (pairs === 24){
+    const wrap = document.querySelector('.wrap');
+    const wrapW = wrap ? wrap.clientWidth : Math.min(1200, Math.floor(window.innerWidth * 0.96));
+    const headerH = (wrap && wrap.querySelector('header')) ? wrap.querySelector('header').offsetHeight : 0;
+
+    // Aim for 8 columns x 6 rows
+    const cols = 8;
+    gap = 10;
+    const pad = 32; // wrap padding + a bit of breathing room
+    const maxW = Math.floor((wrapW - pad - (cols - 1) * gap) / cols);
+
+    // Height constraint: available viewport height minus header and margins
+    const availableH = Math.max(420, window.innerHeight - headerH - 120);
+    const rows = 6;
+    const maxH = Math.floor((availableH - (rows - 1) * gap) / rows);
+
+    // Keep a pleasant card ratio
+    const ratio = 160 / 120;
+    cardW = Math.max(70, Math.min(maxW, Math.floor(maxH / ratio)));
+    cardH = Math.floor(cardW * ratio);
+
+    // "are u sure" gets a slightly tighter layout
+    if (diffId === 'areusure'){
+      gap = Math.max(8, gap - 2);
+    }
+  }
+  const root = document.documentElement;
+  root.style.setProperty('--card-w', cardW + 'px');
+  root.style.setProperty('--card-h', cardH + 'px');
+  root.style.setProperty('--gap', gap + 'px');
+}
+
+function init(){
+  msgEl.textContent = "";
+  hideGameOver();
+  resumeMedia();
+  moves = 0;
+  matches = 0;
+  first = null;
+  second = null;
+  lock = false;
+
+  resetTimer();
+
+  // Determine difficulty
+  const raw = (difficultyEl && difficultyEl.value) ? difficultyEl.value : '24';
+  const numeric = Number(raw);
+
+  if (Number.isFinite(numeric)){
+    activePairs = Math.min(numeric, BASE_IMAGES.length);
+    activeImages = BASE_IMAGES;
+    activeDiffId = raw;
+  } else if (raw === 'areusure'){
+    activePairs = 48;
+    activeImages = ARE_U_SURE_IMAGES;
+    activeDiffId = 'areusure';
+  } else {
+    activePairs = 24;
+    activeImages = BASE_IMAGES;
+    activeDiffId = '24';
+  }
+
+  applyDifficultyVisuals(activePairs, activeDiffId);
+
+  deck = makeDeck(activePairs, activeImages);
+  render();
+}
+
+
+
+// --- Intro / greeting overlay (2-step) ---
+const introOverlay = document.getElementById("introOverlay");
+const introText = document.getElementById("introText");
+const introCard = document.getElementById("introCard");
+
+let introStep = 0; // 0 = greeting, 1 = rules
+
+function closeIntro(){
+  if (!introOverlay) return;
+  introOverlay.classList.add("hidden");
+  introOverlay.setAttribute("aria-hidden", "true");
+  document.body.classList.remove("intro-open");
+}
+
+function advanceIntro(){
+  if (!introOverlay || !introText) return;
+  if (introStep === 0){
+    introText.textContent = "Rules are very simple, you just have to flip cards to find matching pairs.";
+    introStep = 1;
+    return;
+  }
+  closeIntro();
+}
+
+// Tap/click anywhere on the card to go Next/Start (like your example)
+if (introOverlay && introText && introCard){
+  introCard.addEventListener('click', (e) => {
+    e.preventDefault();
+    advanceIntro();
+  });
+}
+
+window.addEventListener('resize', () => {
+  requestAnimationFrame(updateLayout);
+});
+
+init();
+</script>
+</div></body>
+</html>
